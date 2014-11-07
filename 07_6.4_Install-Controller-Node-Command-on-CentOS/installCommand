@@ -1,0 +1,314 @@
+----------------
+ 1. NTP 설치
+----------------
+# yum install ntp
+# vi /etc/ntp.conf
+------ ntp.conf start
+#server 0.centos.pool.ntp.org iburst
+#server 1.centos.pool.ntp.org iburst
+#server 2.centos.pool.ntp.org iburst
+#server 3.centos.pool.ntp.org iburst
+server 127.127.1.0
+------ ntp.conf end
+# service ntpd start
+# chkconfig ntpd on
+# ntpq -p
+
+
+----------------
+ 2. Database 설치
+----------------
+# yum install mysql mysql-server MySQL-python
+# vi /etc/my.cnf
+------ my.cnf start
+[mysqld]
+bind-address = 10.10.15.11
+default-storage-engine = innodb
+innodb_file_per_table
+collation-server = utf8_general_ci
+init-connect = 'SET NAMES utf8'
+character-set-server = utf8
+------ my.cnf end
+# service mysqld start
+# chkconfig mysqld on
+# chkconfig --list | grep mysqld
+# mysqladmin -u root password ‘openstack’
+# mysql_install_db
+# mysql_secure_installation
+
+----------------
+ 3. Packages 설치
+----------------
+# yum install yum-plugin-priorities
+# yum install http://repos.fedorapeople.org/repos/openstack/openstack-icehouse/rdo-release-icehouse-3.noarch.rpm
+# yum install http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+# yum install openstack-utils
+# yum install openstack-selinux
+# yum upgrade
+# reboot
+
+
+----------------
+ 4. Qpid 설치
+----------------
+# yum install qpid-cpp-server
+# vi /etc/qpidd.conf
+------ qpidd.conf start
+auto=no
+------ qpidd.conf end
+# service qpidd start
+# chkconfig qpidd on
+
+
+----------------
+ 5. Keystone 설치
+----------------
+# yum install openstack-keystone python-keystoneclient
+# openstack-config --set /etc/keystone/keystone.conf database connection mysql://keystone:keystonedbpass@10.10.15.11/keystone
+# mysql -u root -p
+mysql> CREATE DATABASE keystone;
+mysql> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY ‘keystonedbpass';
+mysql> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'keystonedbpass';
+mysql> exit
+# su -s /bin/sh -c "keystone-manage db_sync" keystone
+# ADMIN_TOKEN=$(openssl rand -hex 10)
+# echo $ADMIN_TOKEN
+# openstack-config --set /etc/keystone/keystone.conf DEFAULT admin_token $ADMIN_TOKEN
+# keystone-manage pki_setup --keystone-user keystone --keystone-group keystone
+# chown -R keystone:keystone /etc/keystone/ssl
+# chmod -R o-rwx /etc/keystone/ssl
+# service openstack-keystone start
+# chkconfig openstack-keystone on
+
+
+----------------
+ 6. Keystone 사용자 생성
+----------------
+# export OS_SERVICE_TOKEN=$ADMIN_TOKEN
+# export OS_SERVICE_ENDPOINT=http://10.10.15.11:35357/v2.0
+# keystone user-create --name=admin --pass=adminpass --email=admin@email.com
+# keystone role-create --name=admin
+# keystone tenant-create --name=admin --description="Admin Tenant"
+# keystone user-role-add --user=admin --tenant=admin --role=admin
+# keystone user-role-add --user=admin --tenant=_member_ --role=admin
+# keystone user-create --name=demo --pass=demopass --email=demo@email.com
+# keystone tenant-create --name=demo --description="Demo Tenant"
+# keystone user-role-add --user=demo --role=_member_ --tenant=demo
+# keystone tenant-create --name=service --description="Service Tenant"
+# keystone service-create --name=keystone --type=identity --description="OpenStack Identity"
+# keystone endpoint-create \
+  --service-id=4fdf89fb665d44f7bf0dd053e8dfadef \
+  --publicurl=http://10.10.15.11:5000/v2.0 \
+  --internalurl=http://10.10.15.11:5000/v2.0 \
+  --adminurl=http://10.10.15.11:35357/v2.0
+# unset OS_SERVICE_TOKEN OS_SERVICE_ENDPOINT
+# vi admin-openrc.sh
+------ admin-openrc.sh start
+export OS_USERNAME=admin
+export OS_PASSWORD=adminpass
+export OS_TENANT_NAME=admin
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ admin-openrc.sh end
+# source admin-openrc.sh
+# keystone token-get
+# keystone user-list
+# keystone user-role-list
+
+
+----------------
+ 7. Glance 설치
+----------------
+# yum install openstack-glance python-glanceclient
+# openstack-config --set /etc/glance/glance-api.conf database connection mysql://glance:glancedbpass@10.10.15.11/glance
+# openstack-config --set /etc/glance/glance-registry.conf database connection mysql://glance:glancedbpass@10.10.15.11/glance
+# openstack-config --set /etc/glance/glance-api.conf DEFAULT rpc_backend qpid
+# openstack-config --set /etc/glance/glance-api.conf DEFAULT qpid_hostname 10.10.15.11
+# mysql -u root -p
+mysql> CREATE DATABASE glance;
+mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' IDENTIFIED BY 'glancedbpass';
+mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'glancedbpass';
+# su -s /bin/sh -c "glance-manage db_sync" glance
+# keystone user-create --name=glance --pass=glancepass --email=glance@example.com
+# keystone user-role-add --user=glance --tenant=service --role=admin
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken auth_uri http://10.10.15.11:5000
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken auth_host 10.10.15.11
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken auth_port 35357
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken auth_protocol http
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken admin_tenant_name service
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken admin_user glance
+# openstack-config --set /etc/glance/glance-api.conf keystone_authtoken admin_password glancepass
+# openstack-config --set /etc/glance/glance-api.conf paste_deploy flavor keystone
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken auth_uri http://10.10.15.11:5000
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken auth_host 10.10.15.11
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken auth_port 35357
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken auth_protocol http
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken admin_tenant_name service
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken admin_user glance
+# openstack-config --set /etc/glance/glance-registry.conf keystone_authtoken admin_password glancepass
+# openstack-config --set /etc/glance/glance-registry.conf paste_deploy flavor keystone
+# keystone service-create --name=glance --type=image --description="OpenStack Image Service"
+# keystone endpoint-create \
+  --service-id=b87d2c7a58474da1a5a0a6100d074893 \
+  --publicurl=http://10.10.15.11:9292 \
+  --internalurl=http://10.10.15.11:9292 \
+--adminurl=http://10.10.15.11:9292
+# service openstack-glance-api start
+# service openstack-glance-registry start
+# chkconfig openstack-glance-api on
+# chkconfig openstack-glance-registry on
+# mkdir /tmp/images
+# cd /tmp/images/
+# wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img
+# glance image-create --name "cirros-0.3.2-x86_64" --disk-format qcow2 --container-format bare --is-public True --progress < cirros-0.3.2-x86_64-disk.img
+# glance image-list
+
+
+----------------
+ 8. Nova Management 설치
+----------------
+# yum install openstack-nova-api openstack-nova-cert openstack-nova-conductor \
+  openstack-nova-console openstack-nova-novncproxy openstack-nova-scheduler \
+  python-novaclient
+# openstack-config --set /etc/nova/nova.conf database connection mysql://nova:novadbpass@10.10.15.11/nova
+# openstack-config --set /etc/nova/nova.conf DEFAULT rpc_backend qpid
+# openstack-config --set /etc/nova/nova.conf DEFAULT qpid_hostname 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf DEFAULT my_ip 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_listen 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_proxyclient_address 10.10.15.11
+# mysql -u root -p
+mysql> CREATE DATABASE nova;
+mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'localhost' IDENTIFIED BY 'novadbpass';
+mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'%' IDENTIFIED BY 'novadbpass';
+# su -s /bin/sh -c "nova-manage db sync" nova
+# keystone user-create --name=nova --pass=novapass --email=nova@example.com
+# keystone user-role-add --user=nova --tenant=service --role=admin
+# openstack-config --set /etc/nova/nova.conf DEFAULT auth_strategy keystone
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_uri http://10.10.15.11:5000
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_host 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_protocol http
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_port 35357
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_user nova
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_tenant_name service
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_password novapass
+# keystone service-create --name=nova --type=compute --description="OpenStack Compute"
+# keystone endpoint-create \
+  --service-id=867c0b68aac94cf8b6ef69f528abc651 \
+  --publicurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s
+# service openstack-nova-api start
+# service openstack-nova-cert start
+# service openstack-nova-consoleauth start
+# service openstack-nova-scheduler start
+# service openstack-nova-conductor start
+# service openstack-nova-novncproxy start
+# chkconfig openstack-nova-api on
+# chkconfig openstack-nova-cert on
+# chkconfig openstack-nova-consoleauth on
+# chkconfig openstack-nova-scheduler on
+# chkconfig openstack-nova-conductor on
+# chkconfig openstack-nova-novncproxy on
+# nova image-list
+
+
+----------------
+ 9. Nova Network 설정
+----------------
+# openstack-config --set /etc/nova/nova.conf DEFAULT network_api_class nova.network.api.API
+# openstack-config --set /etc/nova/nova.conf DEFAULT security_group_api nova
+# service openstack-nova-api restart
+# service openstack-nova-scheduler restart
+# service openstack-nova-conductor restart
+
+
+----------------
+ 10. Horizon 설치
+----------------
+# yum install memcached python-memcached mod_wsgi openstack-dashboard
+# vi /etc/openstack-dashboard/local_settings
+------ local_settings start
+CACHES = {
+'default': {
+'BACKEND' : 'django.core.cache.backends.memcached.MemcachedCache',
+'LOCATION' : 127.0.0.1:11211'
+}
+}
+ALLOWED_HOSTS = ['localhost', '10.10.15.11']
+OPENSTACK_HOST = "10.10.15.11"
+------ local_settings end
+# setsebool -P httpd_can_network_connect on
+# vi /etc/httpd/conf/httpd.conf
+------ httpd.conf start
+ServerName 10.10.15.11:80
+------ httpd.conf end
+# service httpd start
+# service memcached start
+# chkconfig httpd on
+# chkconfig memcached on
+
+
+----------------
+ 11. Cinder 설치
+----------------
+$ sudo fdisk -l
+# pvcreate /dev/sdb
+# vgcreate cinder-volumes /dev/sdb
+# vi /etc/lvm/lvm.conf
+------ lvm.conf start
+devices {
+filter = [ "a/sda1/", "a/sdb/", "r/.*/"]
+}
+------ lvm.conf end
+# yum install openstack-cinder scsi-target-utils
+# openstack-config --set /etc/cinder/cinder.conf database connection mysql://cinder:cinderdbpass@10.10.15.11/cinder
+# mysql -u root –p
+mysql> CREATE DATABASE cinder;
+mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'cinderdbpass';
+mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'cinderdbpass';
+# su -s /bin/sh -c "cinder-manage db sync" cinder
+# keystone user-create --name=cinder --pass=cinderpass --email=cinder@example.com
+# keystone user-role-add --user=cinder --tenant=service --role=admin
+# openstack-config --set /etc/cinder/cinder.conf DEFAULT auth_strategy keystone
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken auth_uri http://10.10.15.11:5000
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken auth_host 10.10.15.11
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken auth_protocol http
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken auth_port 35357
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken admin_user cinder
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken admin_tenant_name service
+# openstack-config --set /etc/cinder/cinder.conf keystone_authtoken admin_password cinderpass
+# openstack-config --set /etc/cinder/cinder.conf DEFAULT rpc_backend cinder.openstack.common.rpc.impl_qpid
+# openstack-config --set /etc/cinder/cinder.conf DEFAULT qpid_hostname 10.10.15.11
+# openstack-config --set /etc/cinder/cinder.conf DEFAULT glance_host 10.10.15.11
+# keystone service-create --name=cinder --type=volume --description="OpenStack Block Storage"
+# keystone endpoint-create \
+  --service-id=3679708526d84d77b26e26baf0126817 \
+  --publicurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s
+# keystone endpoint-create \
+  --service-id=786ad0104e504fb7ac794ac161a7c613 \
+  --publicurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s
+# vi /etc/tgt/targets.conf
+------ targets.conf start
+include /etc/cinder/volumes/*
+------ targets.conf end
+# service openstack-cinder-api start
+# service openstack-cinder-scheduler start
+# service openstack-cinder-volume start
+# service tgtd start
+# chkconfig openstack-cinder-api on
+# chkconfig openstack-cinder-scheduler on
+# chkconfig openstack-cinder-volume on
+# chkconfig tgtd on
+# vi demo-openrc.sh
+------ demo-openrc.sh start
+export OS_USERNAME=demo
+export OS_PASSWORD=demopass
+export OS_TENANT_NAME=demo
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ demo-openrc.sh end
+# source demo-openrc.sh
+# cinder create --display-name myVolume 1
+# cinder list
