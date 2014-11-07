@@ -1,0 +1,16 @@
+----------------
+ 1. Upload Image to Glance
+----------------
+$ mkdir images
+$ cd imgaes
+$ wget https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
+$ vi admin-openrc.sh
+------ admin-openrc.sh start
+export OS_USERNAME=admin
+export OS_PASSWORD=adminpass
+export OS_TENANT_NAME=admin
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ admin-openrc.sh end
+$ source admin-openrc.sh
+$ glance image-create --name Ubuntu14.04_LTS --disk-format raw --container-format bare --is-public True --progress < trusty-server-cloudimg-amd64-disk1.img 
+$ glance image-list
