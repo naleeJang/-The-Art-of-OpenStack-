@@ -1,0 +1,118 @@
+----------------
+ 1. NTP 설치
+----------------
+# yum install ntp
+# vi /etc/ntp.conf
+------ ntp.conf start
+#server 0.centos.pool.ntp.org iburst
+#server 1.centos.pool.ntp.org iburst
+#server 2.centos.pool.ntp.org iburst
+#server 3.centos.pool.ntp.org iburst
+server 10.10.15.11
+------ ntp.conf end
+# service ntpd start
+# chkconfig ntpd on
+# ntpq -p
+
+
+----------------
+ 2. Database 설치
+----------------
+# yum install MySQL-python
+
+
+----------------
+ 3. Packages 설치
+----------------
+# yum install yum-plugin-priorities
+# yum install http://repos.fedorapeople.org/repos/openstack/openstack-icehouse/rdo-release-icehouse-3.noarch.rpm
+# yum install http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+# yum install openstack-utils
+# yum install openstack-selinux
+# yum upgrade
+# reboot
+
+ 
+----------------
+ 4. Nova Compute 설치
+----------------
+# yum install openstack-nova-compute
+# openstack-config --set /etc/nova/nova.conf database connection mysql://nova:novadbpass@10.10.15.11/nova
+# openstack-config --set /etc/nova/nova.conf DEFAULT auth_strategy keystone
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_uri http://10.10.15.11:5000
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_host 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_protocol http
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken auth_port 35357
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_user nova
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_tenant_name service
+# openstack-config --set /etc/nova/nova.conf keystone_authtoken admin_password novapass
+# openstack-config --set /etc/nova/nova.conf DEFAULT rpc_backend qpid
+# openstack-config --set /etc/nova/nova.conf DEFAULT qpid_hostname 10.10.15.11
+# openstack-config --set /etc/nova/nova.conf DEFAULT my_ip 10.10.15.21
+# openstack-config --set /etc/nova/nova.conf DEFAULT vnc_enabled True
+# openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_listen 0.0.0.0
+# openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_proxyclient_address 10.10.15.21
+# openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_base_url http://10.10.15.11:6080/vnc_auto.html
+# openstack-config --set /etc/nova/nova.conf DEFAULT glance_host 10.10.15.11
+# egrep -c '(vmx|svm)' /proc/cpuinfo
+# service libvirtd start
+# service openstack-nova-compute start
+# chkconfig libvirtd on
+# chkconfig openstack-nova-compute on
+
+
+----------------
+ 5. Nova Network 설치
+----------------
+# yum install openstack-nova-network openstack-nova-api
+# openstack-config --set /etc/nova/nova.conf DEFAULT network_api_class nova.network.api.API
+# openstack-config --set /etc/nova/nova.conf DEFAULT security_group_api nova
+# openstack-config --set /etc/nova/nova.conf DEFAULT network_manager nova.network.manager.FlatDHCPManager
+# openstack-config --set /etc/nova/nova.conf DEFAULT firewall_driver nova.virt.libvirt.firewall.IptablesFirewallDriver
+# openstack-config --set /etc/nova/nova.conf DEFAULT network_size 254
+# openstack-config --set /etc/nova/nova.conf DEFAULT allow_same_net_traffic False
+# openstack-config --set /etc/nova/nova.conf DEFAULT multi_host True
+# openstack-config --set /etc/nova/nova.conf DEFAULT send_arp_for_ha True
+# openstack-config --set /etc/nova/nova.conf DEFAULT share_dhcp_address True
+# openstack-config --set /etc/nova/nova.conf DEFAULT force_dhcp_release True
+# openstack-config --set /etc/nova/nova.conf DEFAULT flat_network_bridge br100
+# openstack-config --set /etc/nova/nova.conf DEFAULT flat_interface eth1
+# openstack-config --set /etc/nova/nova.conf DEFAULT public_interface eth1
+# service openstack-nova-network start
+# service openstack-nova-metadata-api start
+# chkconfig openstack-nova-network on
+# chkconfig openstack-nova-metadata-api on
+
+
+----------------
+ 6. Nova Network 생성
+---------------- 
+# source admin-openrc.sh
+# nova network-create demo-net --bridge br100 --multi-host T --fixed-range-v4 192.168.0.24/29
+
+
+----------------
+ 7. Nova Instance 생성
+---------------- 
+# cat demo-openrc.sh
+------ demo-openrc.sh start
+export OS_USERNAME=demo
+export OS_PASSWORD=demopass
+export OS_TENANT_NAME=demo
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ demo-openrc.sh end
+# source demo-openrc.sh
+# ssh-keygen
+# nova keypair-add --pub-key ~/.ssh/id_rsa.pub demo-key
+# nova keypair-list
+# nova flavor-list
+# nova image-list
+# source admin-openrc.sh
+# nova net-list
+# source demo-openrc.sh
+# nova secgroup-list
+# nova boot --flavor m1.tiny --image cirros-0.3.2-x86_64 --nic net-id=7f849be3-4494-495a-95a1-0f99ccb884c4 --security-group default --key-name demo-key demo-instance1
+# nova list
+# nova get-vnc-console demo-instance1 novnc
+# nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
+# nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
