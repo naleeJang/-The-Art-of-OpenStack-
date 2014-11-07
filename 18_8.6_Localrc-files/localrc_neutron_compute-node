@@ -1,0 +1,37 @@
+# devstack localrc for neutron multi node on compute node
+
+# default
+HOST_IP=10.10.15.21
+MULTI_HOST=True
+ 
+# network
+FLOATING_RANGE=192.168.0.0/24
+PUBLIC_NETWORK_GATEWAY=192.168.0.100
+Q_FLOATING_ALLOCATION_POOL=start=192.168.0.200,end=192.168.0.250
+ 
+# vnc
+VNCSERVER_LISTEN=0.0.0.0
+VNCSERVER_PROXYCLIENT_ADDRESS=$HOST_IP
+ 
+# logs
+DEST=/opt/stack
+LOGFILE=$DEST/logs/stack.sh.log
+SCREEN_LOGDIR=$DEST/logs/screen
+ 
+# system password
+ADMIN_PASSWORD=openstack
+MYSQL_PASSWORD=openstack
+RABBIT_PASSWORD=openstack
+SERVICE_PASSWORD=openstack
+SERVICE_TOKEN=openstackservicetoken
+
+# system hosts
+SERVICE_HOST=10.10.15.11
+MYSQL_HOST=$SERVICE_HOST
+RABBIT_HOST=$SERVICE_HOST
+GLANCE_HOSTPORT=$SERVICE_HOST:9292
+KEYSTONE_AUTH_HOST=$SERVICE_HOST
+KEYSTONE_SERVICE_HOST=$SERVICE_HOST
+
+# install service
+ENABLED_SERVICES=n-cpu,n-api,neutron,q-agt
