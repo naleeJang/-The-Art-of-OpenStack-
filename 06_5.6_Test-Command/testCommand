@@ -1,0 +1,77 @@
+----------------
+ 1. Neutron Network 생성
+----------------
+$ source admin-openrc.sh
+$ neutron net-create ext-net --shared --router:external=True
+$ neutron subnet-create ext-net --name ext-subnet --allocation-pool start=192.168.0.100,end=192.168.0.200 --disable-dhcp --gateway 192.168.0.1 19.168.0.0/24
+$ source demo-openrc.sh
+$ neutron net-create demo-net
+$ neutron subnet-create demo-net --name demo-subnet --gateway 10.0.0.1 10.0.0.0/24
+$ neutron router-create demo-router
+$ neutron router-interface-add demo-router demo-subnet
+$ neutron router-gateway-set demo-router ext-net
+
+
+----------------
+ 2. Cinder Volume 생성
+----------------
+$ source demo-openrc.sh
+$ cinder create --display-name myVolume 1
+$ cinder list
+
+
+----------------
+ 3. Swift 
+----------------
+$ source admin-openrc.sh
+$ swift stat
+$ swift upload myfiles test.txt
+$ swift upload myfiles test2.txt
+$ swift download myfiles
+
+
+----------------
+ 4. Heat
+----------------
+$ source demo-openrc.sh
+$ vi test-stack.yml
+------ test-stack.yml start
+heat_template_version: 2013-06-03
+
+description: Test Template
+
+parameters:
+  ImageID:
+    type: string
+    description: Image use to boot a server
+  NetID:
+    type: string
+    description: Network ID for the server
+
+resources:
+  server1:
+    type: OS::Nova::Server
+    properties:
+      name: "Test server"
+      image: { get_param: ImageID }
+      flavor: "m1.tiny"
+      networks:
+      - network: { get_param: NetID }
+
+outputs:
+  server1_private_ip:
+    description: IP address of the server in the private network
+    value: { get_attr: [ server1, first_address ] }
+------ test-stack.yml end
+$ NET_ID=$(neutron net-list | awk '/ demo-net / { print $2 }')
+$ heat stack-create -f test-stack.yml -P "ImageID=cirros-0.3.2-x86_64;NetID=$NET_ID" testStack
+$ heat stack-list
+
+
+
+----------------
+ 5. Ceilometer
+----------------
+$ ceilometer meter-list
+$ glance image-download "cirros-0.3.2-x86_64" > cirros.img
+$ ceilometer meter-list
