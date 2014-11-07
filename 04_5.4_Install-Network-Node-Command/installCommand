@@ -1,0 +1,107 @@
+----------------
+ 1. NTP 설치
+----------------
+$ sudo apt-get install ntp
+$ sudo ntpdate -u 10.10.15.11
+$ sudo service ntp start
+$ sudo hwclock -w
+
+
+----------------
+ 2. Database 설치
+----------------
+$ sudo apt-get install python-mysqldb
+
+
+----------------
+ 3. Packages 설치
+----------------
+$ sudo apt-get install python-software-properties
+$ sudo add-apt-repository cloud-archive:icehouse #설치하고자 하는 버전을 입력합니다. juno를 설치한다면 juno로 변경하면 됩니다.
+$ sudo apt-get update
+$ sudo apt-get dist-upgrade
+$ sudo apt-get install linux-image-generic-lts-saucy linux-headers-generic-lts-saucy
+$ sudo reboot
+
+
+----------------
+ 4. Neutron Networking 설치
+---------------- 
+$ sudo vi /etc/sysctl.conf
+------ sysctl.conf start
+net.ipv4.ip_forward=1
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.default.rp_filter=0
+------ sysctl.conf end
+$ sudo sysctl –p
+$ sudo apt-get install neutron-plugin-ml2 neutron-plugin-openvswitch-agent openvswitch-datapath-dkms neutron-l3-agent neutron-dhcp-agent
+$ sudo vi /etc/neutron/neutron.conf
+------ neutron.conf start
+[DEFAULT]
+auth_strategy = keystone
+rpc_backend = neutron.openstack.common.rpc.impl_kombu
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+core_plugin = ml2
+service_plugins = router
+allow_overlapping_ips = True
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host =10.10.15.11
+auth_protocol = http
+auth_port = 35357
+admin_tenant_name = service
+admin_user = neutron
+admin_password = neutronpass
+[database]
+connection = mysql://neutron:neutrondbpass@10.10.15.11/neutron
+------ neutron.conf end
+$ sudo vi /etc/neutron/l3_agent.ini
+------ l3_agent.ini start
+[DEFAULT]
+interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
+use_namespaces = True
+------ l3_agent.ini end
+$ sudo vi /etc/neutron/dhcp_agent.ini
+------ dhcp_agent.ini start
+[DEFAULT]
+interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
+dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq
+use_namespaces = True
+------ dhcp_agent.ini end
+$ sudo vi /etc/neutron/metadata_agent.ini
+------ metadata_agent.ini start
+[DEFAULT]
+auth_url = http://10.10.15.11:5000/v2.0
+auth_region = regionOne
+admin_tenant_name = service
+admin_user = neutron
+admin_password = neutronpass
+nova_metadata_ip = 10.10.15.11
+metadata_proxy_shared_secret = metadatasecret
+------ dhcp_agent.ini end
+$ sudo vi /etc/neutron/plugins/ml2/ml2_conf.ini
+------ ml2_conf.ini start
+[ml2]
+type_drivers = gre
+tenant_network_types = gre
+mechanism_drivers = openvswitch
+[ml2_type_gre]
+tunnel_id_ranges = 1:1000
+[ovs]
+local_ip = eth1
+tunnel_type = gre
+enable_tunneling = True
+[securitygroup]
+firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+enable_security_group = True
+metadata_proxy_shared_secret = metadatasecret
+------ ml2_conf.ini end
+$ sudo service openvswitch-switch restart
+$ sudo ovs-vsctl add-br br-int
+$ sudo ovs-vsctl add-br br-ex
+$ sudo ovs-vsctl add-port br-ex eth2
+$ sudo service neutron-dhcp-agent restart
+$ sudo service neutron-plugin-openvswitch-agent restart
+$ sudo service neutron-dhcp-agent restart
+$ sudo service neutron-metadata-agent restart
