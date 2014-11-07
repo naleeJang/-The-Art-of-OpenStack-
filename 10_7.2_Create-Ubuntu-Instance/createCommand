@@ -1,0 +1,21 @@
+----------------
+ 1. Create Instance
+----------------
+$ vi demo-openrc.sh
+------ demo-openrc.sh start
+export OS_USERNAME=demo
+export OS_PASSWORD=demopass
+export OS_TENANT_NAME=demo
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ demo-openrc.sh end
+$ source demo-openrc.sh
+$ ssh-keygen
+$ nova keypair-add --pub-key ~/.ssh/id_rsa.pub test-key
+$ nova keypair-list
+$ nova flavor-list
+$ nova image-list
+$ neutron net-list
+$ nova secgroup-list
+$ nova boot --flavor m1.tiny --image "Ubuntu 14.04 LTS" --nic net-id=466d5fa4-435f-446a-9e9b-ee756ec23b7a --security-groups default --key-name test-key test-instance1
+$ nova list
+$ nova get-vnc-console test-instance1 novnc 
