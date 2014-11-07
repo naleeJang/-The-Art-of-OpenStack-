@@ -1,0 +1,260 @@
+----------------
+ 1. NTP 설치
+----------------
+$ sudo apt-get install ntp
+$ sudo ntpdate -u 10.10.15.11
+$ sudo hwclock -w
+
+
+----------------
+ 2. Database 설치
+----------------
+$ sudo apt-get install python-mysqldb
+
+
+----------------
+ 3. Nova Compute 설치
+----------------
+$ egrep -c '(vmx|svm)' /proc/cpuinfo
+$ cat /proc/cpuinfo | egrep '(vmx|svm)'
+$ sudo apt-get install nova-compute-kvm python-guestfs qemu-kvm
+$ sudo dpkg-statoverride  --update --add root root 0644 /boot/vmlinuz-$(uname -r)
+$ sudo vi /etc/kernel/postinst.d/statoverride
+------ statoverride start
+#!/bin/sh
+version="$1"
+# passing the kernel version is required
+[ -z "${version}" ] && exit 0
+dpkg-statoverride --update --add root root 0644 /boot/vmlinuz-${version}
+------ statoverride end
+$ sudo chmod +x /etc/kernel/postinst.d/statoverride
+$ sudo vi /etc/nova/nova.conf
+------ nova.conf start
+[DEFAULT]
+auth_strategy = keystone
+rpc_backend = rabbit
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+my_ip = 10.10.15.31
+vnc_enabled = True
+vncserver_listen = 0.0.0.0
+vncserver_proxyclient_address = 10.10.15.31
+novncproxy_base_url = http://10.10.15.11:6080/vnc_auto.html
+glance_host =10.10.15.11
+[database]
+# The SQLAlchemy connection string used to connect to the database
+connection = mysql://nova:novadbpass@10.10.15.11/nova
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host =10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = nova
+admin_password = novapass
+------ nova.conf end
+$ sudo vi /etc/nova/nova-compute.conf
+------ nova-compute.conf start
+[libvirt]
+...
+virt_type = qemu
+$ sudo rm /var/lib/nova/nova.sqlite
+$ sudo service nova-compute restart
+------ nova-compute.conf end
+
+
+----------------
+ 4. Neutron Compute 설치
+---------------- 
+$ sudo vi /etc/sysctl.conf
+------ sysctl.conf start
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.default.rp_filter=0
+------ sysctl.conf end
+$ sudo sysctl –p
+$ sudo apt-get install neutron-common neutron-plugin-ml2 neutron-plugin-openvswitch-agent openvswitch-datapath-dkms
+$ sudo vi /etc/neutron/neutron.conf
+------ neutron.conf start
+[DEFAULT]
+auth_strategy = keystone
+rpc_backend = neutron.openstack.common.rpc.impl_kombu
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+core_plugin = ml2
+service_plugins = router
+allow_overlapping_ips = True
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_protocol = http
+auth_port = 35357
+admin_tenant_name = service
+admin_user = neutron
+admin_password = neutronpass
+------ neutron.conf end
+$ sudo vi /etc/neutron/plugins/ml2/ml2_conf.ini
+------ ml2_conf.ini start
+[ml2]
+type_drivers = gre
+tenant_network_types = gre
+mechanism_drivers = openvswitch
+[ml2_type_gre]
+tunnel_id_ranges = 1:1000
+[ovs]
+local_ip = eth1
+tunnel_type = gre
+enable_tunneling = True
+[securitygroup]
+firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+enable_security_group = True
+------ ml2_conf.ini end
+$ sudo service openvswitch-switch restart
+$ sudo ovs-vsctl add-br br-int
+$ sudo vi /etc/nova/nova.conf
+------ nova.conf start
+[DEFAULT]
+network_api_class = nova.network.neutronv2.api.API
+neutron_url = http://10.10.15.11:9696
+neutron_auth_strategy = keystone
+neutron_admin_tenant_name = service
+neutron_admin_username = neutron
+neutron_admin_password = neutronpass
+neutron_admin_auth_url = http://10.10.15.11:35357/v2.0
+linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
+firewall_driver = nova.virt.firewall.NoopFirewallDriver
+security_group_api = neutron
+------ nova.conf end
+$ sudo service nova-compute restart
+$ sudo service neutron-plugin-openvswitch-agent restart
+
+
+----------------
+ 5. Cinder Volume 설치
+---------------- 
+$ sudo apt-get install lvm2
+$ sudo fdisk -l
+$ sudo pvcreate /dev/sdb
+$ sudo vgcreate cinder-volumes /dev/sdb
+$ sudo vi /etc/lvm/lvm.conf
+------ lvm.conf start
+devices {
+filter = [ "a/sda1/", "a/sdb/", "r/.*/"]
+}
+------ lvm.conf end
+$ sudo apt-get install cinder-volume
+$ sudo vi /etc/cinder/cinder.conf
+------ cinder.conf start
+[DEFAULT]
+rpc_backend = cinder.openstack.common.rpc.impl_kombu
+rabbit_host = 10.10.15.11
+rabbit_port = 5672
+rabbit_userid = guest
+rabbit_password = rabbitpass
+glance_host = 10.10.15.11
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = cinder
+admin_password = cinderpass
+[database]
+connection = mysql://cinder:cinderdbpass@10.10.15.11/cinder
+------ cinder.conf end
+$ sudo service cinder-volume restart
+$ sudo service tgt restart
+
+
+----------------
+ 6. Swift Storage Server 설치
+----------------
+$ sudo mkdir -p /etc/swift
+$ sudo vi /etc/swift/swift.conf
+------ swift.conf start
+[swift-hash]
+swift_hash_path_suffix = fLIbertYgibbitZ # 컨트롤러 노드의 swift.conf에서 복사합니다.
+------ swift.conf end
+$ sudo apt-get install swift swift-account swift-container swift-object xfsprogs python-swiftclient python-keystoneclient
+$ sudo fdisk /dev/sdb
+$ sudo mkfs.xfs /dev/sdb1
+$ sudo echo "/dev/sdb1 /srv/node/sdb1 xfs noatime,nodiratime,nobarrier,logbufs=8 0 0" >> /etc/fstab
+$ sudo mkdir -p /srv/node/sdb1
+$ sudo mount /srv/node/sdb1
+$ sudo chown -R swift:swift /srv/node
+$ sudo vi /etc/rsyncd.conf
+------ rsyncd.conf start
+uid = swift
+gid = swift
+log file = /var/log/rsyncd.log
+pid file = /var/run/rsyncd.pid
+address = 10.10.15.31
+[account]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/account.lock
+[container]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/container.lock
+[object]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/object.lock
+------ rsyncd.conf end
+$ sudo vi /etc/default/rsync
+------ rsync start
+RSYNC_ENABLE=true
+------ rsync end
+$ sudo service rsync start
+$ sudo mkdir -p /var/swift/recon
+$ sudo chown -R swift:swift /var/swift/recon
+$ scp swift@10.10.15.11:/etc/swift/*.ring.gz /etc/swift
+$ for service in \
+  swift-object swift-object-replicator swift-object-updater swift-object-auditor \
+  swift-container swift-container-replicator swift-container-updater \
+  swift-container-auditor swift-account swift-account-replicator 
+  swift-account-reaper swift-account-auditor; do \
+  service $service start; done
+
+
+----------------
+ 7. Ceilometer Compute Agent 설치
+----------------
+$ sudo apt-get install ceilometer-agent-compute
+$ sudo vi /etc/nova/nova.conf
+------ nova.conf start
+[DEFAULT]
+instance_usage_audit = True
+instance_usage_audit_period = hour
+notify_on_state_change = vm_and_task_state
+notification_driver = nova.openstack.common.notifier.rpc_notifier
+notification_driver = ceilometer.compute.nova_notifier
+------ nova.conf end
+$ sudo service nova-compute restart
+$ sudo vi /etc/ceilometer/ceilometer.conf
+------ ceilometer.conf start
+[publisher]
+# Secret value for signing metering messages (string value)
+metering_secret = 115ca7336ad88e5c64a8 #컨트롤러 노드의 ceilometer.conf에서 복사해 옵니다.
+[DEFAULT]
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+log_dir = /var/log/ceilometer
+[keystone_authtoken]
+auth_host =10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = ceilometer
+admin_password = ceilometerpass
+[service_credentials]
+os_auth_url = http://10.10.15.11:5000/v2.0
+os_username = ceilometer
+os_tenant_name = service
+os_password = ceilometerpass
+------ ceilometer.conf end
+$ sudo service ceilometer-agent-compute restart
