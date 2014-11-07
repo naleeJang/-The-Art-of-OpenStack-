@@ -1,0 +1,566 @@
+----------------
+ 1. NTP 설치
+----------------
+$ sudo apt-get install –y ntp
+$ sudo sed -i 's/server ntp.ubuntu.com/server ntp.ubuntu.com\nserver 127.127.1.0\nfudge 127.127.1.0 stratum 10/g' /etc/ntp.conf
+$ sudo service ntp restart
+
+------------------
+ 2. Database 설치
+------------------
+$ sudo apt-get install python-mysqldb mysql-server
+$ sudo vi /etc/mysql/my.cnf
+------ my.cnf start
+[mysqld]
+...
+bind-address = 10.10.15.11
+...
+default-storage-engine = innodb
+collation-server = utf8_general_ci
+init-connect = 'SET NAMES utf8'
+character-set-server = utf8
+------ my.cnf end
+$ sudo service mysql restart
+$ sudo mysql_install_db
+$ sudo mysql_secure_installation
+
+------------------
+ 3. Packages 설치
+------------------
+$ sudo apt-get install python-software-properties
+$ sudo add-apt-repository cloud-archive:icehouse #설치하고자 하는 버전을 입력합니다. juno를 설치한다면 juno로 변경하면 됩니다.
+$ sudo apt-get update
+$ sudo apt-get dist-upgrade
+$ sudo apt-get install linux-image-generic-lts-saucy linux-headers-generic-lts-saucy
+$ sudo reboot
+
+------------------
+ 4. RabbitMQ 설치
+------------------
+$ sudo apt-get install rabbitmq-server
+$ sudo rabbitmqctl change_password guest rabbitpass #설정하고자 하는 패스워드를 입력합니다.
+
+------------------
+ 5. Keystone 설치
+------------------
+$ sudo apt-get install keystone
+$ sudo vi /etc/keystone/keystone.conf
+------ keystone.conf start
+[database]
+connection = mysql://keystone:keystonedbpass@10.10.15.11/keystone #컨트롤러 노드 IP를 입력하세요
+------ keystone.conf end
+$ mysql -u root -p
+mysql> CREATE DATABASE keystone;
+mysql> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY 'keystonedbpass’;
+mysql> GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'keystonedbpass';
+mysql> exit
+$ sudo su -s /bin/sh -c "keystone-manage db_sync" keystone
+$ openssl rand -hex 10
+$ sudo vi /etc/keystone/keystone.conf
+------ keystone.conf start
+[DEFAULT]
+admin_token = 527e30fb91e0720d6105 #ADMIN_TOKEN
+log_dir = /var/log/keystone
+------ keystone.conf end
+$ sudo service keystone restart
+
+------------------
+ 6. Keystone 사용자 생성
+------------------
+$ export OS_SERVICE_TOKEN=527e30fb91e0720d6105 #ADMIN_TOKEN을 입력합니다.
+$ export OS_SERVICE_ENDPOINT=http://10.10.15.11:35357/v2.0
+$ keystone user-create --name=admin --pass=adminpass --email=admin@email.com
+$ keystone role-create --name=admin
+$ keystone role-create --name=member
+$ keystone tenant-create --name=admin --description="Admin Tenant"
+$ keystone user-role-add --user admin --role admin --tenant admin
+$ keystone user-role-add --user admin --role member --tenant admin
+$ keystone user-create --name=demo --pass=demopass --email=demo@email.com
+$ keystone tenant-create --name=demo --description="Demo Tenant"
+$ keystone user-role-add --user=demo --role=member --tenant=demo
+$ keystone tenant-create --name=service --description="Service Tenant"
+$ keystone service-create --name=keystone --type=identity --description="OpenStack Identity"
+$ keystone endpoint-create --service_id=09a4291a19d24cff9aa8377a4383f750 
+--publicurl=http://10.10.15.11:5000/v2.0 \n
+--internalurl=http://10.10.15.11:5000/v2.0 \n
+--adminurl=http://10.10.15.11:35357/v2.0
+$ unset OS_SERVICE_TOKEN OS_SERVICE_ENDPOINT
+$ keystone --os-username=admin --os-password=adminpass --os-auth-url=http://10.10.15.11:35357/v2.0 token-get
+$ keystone --os-username=admin --os-password=adminpass --os-tenant-name=admin --os-auth-url=http://10.10.15.11:35357/v2.0 token-get
+$ vi admin-openrc.sh
+$ source admin-openrc.sh
+$ keystone token-get
+$ keystone user-list
+$ keystone user-role-list
+
+
+------------------
+ 7. Glance 설치
+------------------
+$ sudo apt-get install glance python-glanceclient
+$ sudo vi /etc/glance/glance-api.conf
+------ glance-api.conf start
+[DEFAULT]
+rpc_backend = rabbit
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+[database]
+#sqlite_db = /var/lib/glance/glance.sqlite
+connection = mysql://glance:glancedbpass@10.10.15.11/glance
+#backend = sqlalchemy
+backend = mysql
+------ glance-api.conf end
+$ sudo vi /etc/glance/glance-registry.conf
+------ glance-registry.conf start
+[database]
+#sqlite_db = /var/lib/glance/glance.sqlite
+connection = mysql://glance:glancedbpass@10.10.15.11/glance
+#backend = sqlalchemy
+backend = mysql
+------ glance-registry.conf end
+$ sudo rm /var/lib/glance/glance.sqlite
+$ mysql -u root -p
+mysql> CREATE DATABASE glance;
+mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' IDENTIFIED BY 'glancedbpass';
+mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'glancedbpass';
+mysql> exit
+$ sudo su -s /bin/sh -c "glance-manage db_sync" glance
+$ keystone user-create --name=glance --pass=glancepass --email=glance@email.com
+$ sudo vi /etc/glance/glance-api.conf
+------ glance-api.conf start
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = glance
+admin_password = glancepass
+[paste_deploy]
+flavor = keystone
+------ glance-api.conf end
+$ sudo vi /etc/glance/glance-registry.conf
+------ glance-registry.conf start
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = glance
+admin_password = glancepass
+[paste_deploy]
+flavor = keystone
+------ glance-registry.conf end
+$ keystone service-create --name=glance --type=image --description="OpenStack Image Service"
+$ keystone endpoint-create \
+  --service-id=7b19720a6a7c4ddcb372230d399f8e65 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:9292 \
+  --internalurl=http://10.10.15.11:9292 \
+--adminurl=http://10.10.15.11:9292
+$ sudo service glance-registry restart
+$ sudo service glance-api restart
+$ mkdir images
+$ cd images/
+$ wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img
+$ source admin-openrc.sh
+$ glance image-create --name "cirros-0.3.2-x86_64" --disk-format qcow2 \
+  --container-format bare --is-public True --progress < cirros-0.3.2-x86_64-disk.img
+$ glance image-list
+
+------------------
+ 8. Nova Management 설치
+------------------
+$ sudo apt-get install nova-api nova-cert nova-conductor nova-consoleauth \
+  nova-novncproxy nova-scheduler python-novaclient
+$ sudo vi /etc/nova/nova.conf
+------ nova.conf start
+[DEFAULT]
+rpc_backend = rabbit
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+my_ip = 10.10.15.11
+vncserver_listen = 10.10.15.11
+vncserver_proxyclient_address = 10.10.15.11
+[database]
+connection = mysql://nova:novadbpass@10.10.15.11/nova
+------ nova.conf end
+$ sudo rm /var/lib/nova/nova.sqlite
+$ mysql -u root -p
+mysql> CREATE DATABASE nova;
+mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'localhost' IDENTIFIED BY 'novadbpass';
+mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'%' IDENTIFIED BY 'novadbpass';
+mysql> exit
+$ sudo su -s /bin/sh -c "nova-manage db sync" nova
+$ keystone user-create --name=nova --pass=novapass --email=nova@email.com
+$ sudo vi /etc/nova/nova.conf
+------ nova.conf start
+[DEFAULT]
+auth_strategy = keystone
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = nova
+admin_password = novapass
+------ nova.conf end
+$ keystone service-create --name=nova --type=compute --description="OpenStack Compute"
+$ keystone endpoint-create \
+  --service-id=606bcc456b4740d19cf833c39d28f03e \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8774/v2/%\(tenant_id\)s
+$ sudo service nova-api restart
+$ sudo service nova-cert restart
+$ sudo service nova-consoleauth restart
+$ sudo service nova-scheduler restart
+$ sudo service nova-conductor restart
+$ sudo service nova-novncproxy restart
+$ source admin-openrc.sh
+$ nova image-list
+
+
+------------------
+ 9. Neutron 서버 설치
+------------------
+$ mysql -u root -p
+mysql> CREATE DATABASE neutron;
+mysql> GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost' IDENTIFIED BY 'neutrondbpass';
+mysql> GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'%' IDENTIFIED BY 'neutrondbpass';
+mysql> exit
+$ keystone user-create --name neutron --pass neutronpass --email neutron@email.com
+$ keystone user-role-add --user neutron --tenant service --role admin
+$ keystone service-create –name=neutron –type=network –description="OpenStack Networking"
+$ keystone endpoint-create \
+  --service-id=e6c839a3a17b4f7989e551a64b58e122 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:9696 \
+  --adminurl=http://10.10.15.11:9696 \
+--internalurl=http://10.10.15.11:9696
+$ sudo apt-get install neutron-server neutron-plugin-ml2
+$ sudo vi /etc/neutron/neutron.conf
+------ neutron.conf start
+[DEFAULT]
+auth_strategy = keystone
+rpc_backend = neutron.openstack.common.rpc.impl_kombu
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+notify_nova_on_port_status_changes = True
+notify_nova_on_port_data_changes = True
+nova_url = http://10.10.15.11:8774/v2
+nova_admin_username = nova
+nova_admin_tenant_id = 850e02e81d02499eaf1e726147ac0640 #SERVICE_TENANT_ID로 반드시 변경해야 합니다.
+nova_admin_password = novapass
+nova_admin_auth_url = http://10.10.15.11:35357/v2.0
+core_plugin = ml2
+service_plugins = router
+allow_overlapping_ips = True
+network_api_class = nova.network.neutronv2.api.API
+neutron_url = http://10.10.15.11:9696
+neutron_auth_strategy = keystone
+neutron_admin_tenant_name = service
+neutron_admin_username = neutron
+neutron_admin_password = neutronpass
+neutron_admin_auth_url = http://10.10.15.11:35357/v2.0
+linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
+firewall_driver = nova.virt.firewall.NoopFirewallDriver
+security_group_api = neutron
+service_neutron_metadata_proxy = true
+neutron_metadata_proxy_shared_secret = metadatasecret
+[database]
+connection = mysql://neutron:neutrondbpass@10.10.15.11/neutron
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_protocol = http
+auth_port = 35357
+admin_tenant_name = service
+admin_user = neutron
+admin_password = neutronpass
+------ neutron.conf end
+$ sudo vi /etc/neutron/plugins/ml2/ml2_conf.ini
+------ ml2_conf.ini start
+[ml2]
+type_drivers = gre
+tenant_network_types = gre
+mechanism_drivers = openvswitch
+[ml2_type_gre]
+tunnel_id_ranges = 1:1000
+[securitygroup]
+firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+enable_security_group = True
+------ ml2_conf.ini end
+$ sudo service nova-api restart
+$ sudo service nova-scheduler restart
+$ sudo service nova-conductor restart
+$ sudo service neutron-server restart
+
+
+------------------
+ 10. Horizon 설치
+------------------
+$ sudo apt-get install apache2 memcached libapache2-mod-wsgi openstack-dashboard
+$ sudo apt-get remove --purge openstack-dashboard-ubuntu-theme
+$ sudo vi /etc/memcached.conf
+------ memcached.conf start
+#-l 127.0.0.1
+-l 10.10.15.11
+------ memcached.conf end
+$ sudo vi /etc/openstack-dashboard/local_settings.py
+------ local_settings.py start
+ALLOWED_HOSTS = ['localhost', '10.10.15.11']
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+CACHES = {
+'default': {
+'BACKEND' : 'django.core.cache.backends.memcached.MemcachedCache',
+'LOCATION' : ‘10.10.15.11:11211'
+}
+}
+OPENSTACK_HOST = "10.10.15.11"
+------ local_settings.py end
+$ sudo service apache2 restart
+$ sudo service memcached restart
+
+------------------
+ 11. Cinder 서버 설치
+------------------
+$ sudo apt-get install cinder-api cinder-scheduler
+$ sudo vi /etc/cinder/cinder.conf
+------ cinder.conf start
+[database]
+connection = mysql://cinder:cinderdbpass@10.10.15.11/cinder
+------ cinder.conf end
+$ mysql -u root -p
+mysql> CREATE DATABASE cinder;
+mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'cinderdbpass';
+mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'cinderdbpass';
+mysql> exit
+$ sudo su -s /bin/sh -c "cinder-manage db sync" cinder
+$ source admin-openrc.sh
+$ keystone user-create –name=cinder --pass=cinderpass --email=cinder@email.com
+$ keystone user-role-add --user=cinder --tenant=service --role=admin
+$ sudo vi /etc/cinder/cinder.conf
+------ cinder.conf start
+[DEFAULT]
+rpc_backend = cinder.openstack.common.rpc.impl_kombu
+rabbit_host = 10.10.15.11
+rabbit_port = 5672
+rabbit_userid = guest
+rabbit_password = rabbitpass
+[keystone_authtoken]
+auth_uri = http://10.10.15.11:5000
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = cinder
+admin_password = cinderpass
+------ cinder.conf end
+$ keystone service-create --name=cinder --type=volume --description="OpenStack Block Storage"
+$ keystone endpoint-create \
+  --service-id=beba666e021b46a89c801173e8a6f246 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8776/v1/%\(tenant_id\)s
+$ keystone service-create --name=cinderv2 --type=volumev2 --description="OpenStack Block Storage v2"
+$ keystone endpoint-create \ 
+  --service-id=683afdc793cd4f5bbb7c315e7a6d1a02 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8776/v2/%\(tenant_id\)s
+$ sudo service cinder-scheduler restart
+$ sudo service cinder-api restart
+
+
+------------------
+ 12. Swift Proxy 서버 설치
+------------------
+$ source admin-openrc.sh
+$ keystone user-create --name=swift --pass=swiftpass --email=swift@email.com
+$ keystone user-role-add --user=swift --tenant=service --role=admin
+$ keystone service-create --name=swift --type=object-store --description="OpenStack Object Storage"
+$ keystone endpoint-create \
+  --service-id=2e69a88e0b7445919bf04bd277afa317 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl='http://10.10.15.11:8080/v1/AUTH_%(tenant_id)s' \
+  --internalurl='http://10.10.15.11:8080/v1/AUTH_%(tenant_id)s' \
+  --adminurl=http://10.10.15.11:8080
+$ sudo mkdir -p /etc/swift
+$ sudo vi /etc/swift/swift.conf
+------ swift.conf start
+[swift-hash]
+swift_hash_path_suffix = fLIbertYgibbitZ
+------ swift.conf end
+$ sudo apt-get install swift-proxy memcached python-keystoneclient python-swiftclient python-webob
+$ sudo vi /etc/memcached.conf
+------ memcached.conf start
+#-l 127.0.0.1
+-l 10.10.15.11
+------ memcached.conf end
+$ sudo service memcached restart
+$ sudo vi /etc/swift/proxy-server.conf
+------ proxy-server.conf start
+[DEFAULT]
+bind_port = 8080
+user = swift
+[pipeline:main]
+pipeline = healthcheck cache authtoken keystoneauth proxy-server
+[app:proxy-server]
+use = egg:swift#proxy
+allow_account_management = true
+account_autocreate = true
+[filter:keystoneauth]
+use = egg:swift#keystoneauth
+operator_roles = member,admin,swiftoperator
+[filter:authtoken]
+paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
+# Delaying the auth decision is required to support token-less
+# usage for anonymous referrers ('.r:*').
+delay_auth_decision = true
+# cache directory for signing certificate
+signing_dir = /home/swift/keystone-signing
+# auth_* settings refer to the Keystone server
+auth_protocol = http
+auth_host = 10.10.15.11
+auth_port = 35357
+# the service tenant and swift username and password created in Keystone
+admin_tenant_name = service
+admin_user = swift
+admin_password = swiftpass
+[filter:cache]
+use = egg:swift#memcache
+[filter:catch_errors]
+use = egg:swift#catch_errors
+[filter:healthcheck]
+use = egg:swift#healthcheck
+------ proxy-server.conf end
+$ cd /etc/swift
+$ sudo swift-ring-builder account.builder create 18 3 1
+$ sudo swift-ring-builder container.builder create 18 3 1
+$ sudo swift-ring-builder object.builder create 18 3 1
+$ sudo swift-ring-builder account.builder add z1-10.10.15.31:6002R10.0.1.1:6005/sdb1 100
+$ sudo swift-ring-builder container.builder add z1-10.10.15.31:6001R10.0.1.1:6004/sdb1 100
+$ sudo swift-ring-builder object.builder add z1-10.10.15.31:6000R10.0.1.1:6003/sdb1 100
+$ sudo swift-ring-builder account.builder
+$ sudo swift-ring-builder container.builder
+$ sudo swift-ring-builder object.builder
+$ sudo swift-ring-builder account.builder rebalance
+$ sudo swift-ring-builder container.builder rebalance
+$ sudo swift-ring-builder object.builder rebalance
+$ sudo chown -R swift:swift /etc/swift
+$ sudo service swift-proxy restart
+
+
+------------------
+ 13. Heat 서버 설치
+------------------
+$ sudo apt-get install heat-api heat-api-cfn heat-engine
+$ sudo vi /etc/heat/heat.conf
+------ heat.conf start
+[database]
+connection = mysql://heat:heatdbpass@10.10.15.11/heat
+------ heat.conf end
+$ sudo rm /var/lib/heat/heat.sqlite
+$ mysql -u root -p
+mysql> CREATE DATABASE heat;
+mysql> GRANT ALL PRIVILEGES ON heat.* TO 'heat'@'localhost' IDENTIFIED BY 'heatdbpass';
+mysql> GRANT ALL PRIVILEGES ON heat.* TO 'heat'@'%' IDENTIFIED BY 'heatdbpass';
+mysql> exit
+$ sudo su -s /bin/sh -c "heat-manage db_sync" heat
+$ vi /etc/heat/heat.conf
+------ heat.conf start
+[DEFAULT]
+verbose = True
+log_dir=/var/log/heat
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+[keystone_authtoken]
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+auth_uri = http://10.10.15.11:5000/v2.0
+admin_tenant_name = service
+admin_user = heat
+admin_password = heatpass
+[ec2authtoken]
+auth_uri = http://10.10.15.11:5000/v2.0
+------ heat.conf end
+$ source admin-openrc.sh
+$ keystone user-create --name=heat --pass=heatpass --email=heat@email.com
+$ keystone user-role-add --user=heat --tenant=service --role=admin
+$ keystone service-create --name=heat --type=orchestration --description="Orchestration"
+$ keystone endpoint-create \
+  --service-id=1ad5cfe5707a449091c35fb1337fea33 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8004/v1/%\(tenant_id\)s \
+  --internalurl=http://10.10.15.11:8004/v1/%\(tenant_id\)s \
+--adminurl=http://10.10.15.11:8004/v1/%\(tenant_id\)s
+$ keystone service-create --name=heat-cfn --type=cloudformation --description="Orchestration CloudFormation"
+$ keystone endpoint-create \
+  --service-id=9b268d095c19429e817f951fa89621a4\ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8000/v1 \
+  --internalurl=http://10.10.15.11:8000/v1 \
+--adminurl=http://10.10.15.11:8000/v1
+$ sudo service heat-api restart
+$ sudo service heat-api-cfn restart
+$ sudo service heat-engine restart
+
+
+------------------
+ 14. Ceilometer 설치
+------------------
+$ sudo apt-get install ceilometer-api ceilometer-collector ceilometer-agent-central ceilometer-alarm-evaluator ceilometer-alarm-notifier python-ceilometerclient
+$ sudo apt-get install mongodb-server
+$ sudo vi /etc/mongodb.conf
+------ mongodb.conf start
+bind_ip = 10.10.15.11
+------ mongodb.conf end
+$ sudo service mongodb restart
+$ sudo mongo --host 10.10.15.11 --eval '
+db = db.getSiblingDB("ceilometer");
+db.addUser({user: "ceilometer",
+            pwd: "ceilometerdbpass",
+            roles: [ "readWrite", "dbAdmin" ]})'
+$ sudo vi /etc/ceilometer/ceilometer.conf
+------ ceilometer.conf start
+[database]
+connection = mongodb://ceilometer:ceilometerdbpass@10.10.15.11:27017/ceilometer
+------ ceilometer.conf end
+$ openssl rand -hex 10
+$ sudo vi /etc/ceilometer/ceilometer.conf
+------ ceilometer.conf start
+[publisher]
+metering_secret = 3a82c1a617f1a797a90b # 위에서 생성한 openssl rand값을 입력합니다.
+[DEFAULT]
+log_dir = /var/log/ceilometer
+rabbit_host = 10.10.15.11
+rabbit_password = rabbitpass
+------ ceilometer.conf end
+$ keystone user-create --name=ceilometer --pass=ceilometerpass --email=ceilometer@email.com
+$ keystone user-role-add --user=ceilometer --tenant=service --role=admin
+$ sudo vi /etc/ceilometer/ceilometer.conf
+------ ceilometer.conf start
+[keystone_authtoken]
+auth_host = 10.10.15.11
+auth_port = 35357
+auth_protocol = http
+auth_uri = http://10.0.0.11:5000
+admin_tenant_name = service
+admin_user = ceilometer
+admin_password = ceilometerpass
+[service_credentials]
+os_auth_url = http://10.10.15.11:5000/v2.0
+os_username = ceilometer
+os_tenant_name = service
+os_password = ceilometerpass
+------ ceilometer.conf end
+$ keystone service-create --name=ceilometer --type=metering --description="Telemetry"
+$ keystone endpoint-create \
+  --service-id=cfcc2fca4fa84ccebcdc8a1b57d51016 \ # 위에서 생성한 서비스 ID로 반드시 변경하여야 합니다.
+  --publicurl=http://10.10.15.11:8777 \
+  --internalurl=http://10.10.15.11:8777 \
+--adminurl=http://10.10.15.11:8777
+$ sudo service ceilometer-agent-central restart
+$ sudo service ceilometer-api restart
+$ sudo service ceilometer-collector restart
+$ sudo service ceilometer-alarm-evaluator restart
+$ sudo service ceilometer-alarm-notifier restart
