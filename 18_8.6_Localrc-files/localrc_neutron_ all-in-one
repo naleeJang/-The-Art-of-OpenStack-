@@ -1,0 +1,36 @@
+# Devstack localrc for neutron all-in-one
+
+# default
+HOST_IP=10.10.15.11
+ 
+# network
+FLOATING_RANGE=192.168.0.0/24
+PUBLIC_NETWORK_GATEWAY=192.168.0.100
+Q_FLOATING_ALLOCATION_POOL=start=192.168.0.200,end=192.168.0.250
+
+# vnc
+VNCSERVER_LISTEN=0.0.0.0
+VNCSERVER_PROXYCLIENT_ADDRESS=$HOST_IP
+ 
+# logs
+DEST=/opt/stack
+LOGFILE=$DEST/logs/stack.sh.log
+SCREEN_LOGDIR=$DEST/logs/screen
+ 
+# system password
+ADMIN_PASSWORD=openstack
+MYSQL_PASSWORD=openstack
+RABBIT_PASSWORD=openstack
+SERVICE_PASSWORD=openstack
+SERVICE_TOKEN=openstackservicetoken
+ 
+# neutron - networking service – Neutron에서는 반드시 설정해야 함.
+DISABLED_SERVICES=n-net
+ENABLED_SERVICES+=,q-svc,q-agt,q-dhcp,q-l3,q-meta,q-metering,neutron
+
+# ceilometer - metering Service (metering + alarming) – 필요에 의해 추가 또는 삭제
+ENABLED_SERVICES+=,ceilometer-acompute,ceilometer-acentral,ceilometer-collector,ceilometer-api
+ENABLED_SERVICES+=,ceilometer-alarm-notify,ceilometer-alarm-eval
+
+# swift – 필요에 의해 추가 또는 삭제
+ENABLED_SERVICES+=,s-proxy s-object s-container s-account
