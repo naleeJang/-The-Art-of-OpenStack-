@@ -1,0 +1,45 @@
+###########################
+# Date : 2014.05.21       #
+# Name : naleejang        #
+###########################
+# Devstack localrc for neutron all-in-one
+
+# default - 설치하고자 하는 서버 IP를 입력하세요
+HOST_IP=10.0.3.15
+
+# network
+FLOATING_RANGE=192.168.0.0/24
+PUBLIC_NETWORK_GATEWAY=192.168.0.100
+Q_FLOATING_ALLOCATION_POOL=start=192.168.0.200,end=192.168.0.250
+
+# logs
+DEST=/opt/stack
+LOGFILE=$DEST/logs/stack.sh.log
+SCREEN_LOGDIR=$DEST/logs/screen
+
+# system password
+ADMIN_PASSWORD=openstack
+MYSQL_PASSWORD=openstack
+RABBIT_PASSWORD=openstack
+SERVICE_PASSWORD=openstack
+SERVICE_TOKEN=tokentoken
+
+# neutron - networking service
+DISABLED_SERVICES=n-net
+ENABLED_SERVICES+=,q-svc,q-agt,q-dhcp,q-l3,q-meta,q-metering,neutron
+
+# ***아래부터는 필요에 의해 추가 삭제할 수 있습니다.
+
+# neutron - load balancing
+ENABLED_SERVICES+=,q-lbaas
+
+# heat - orchestration service
+ENABLED_SERVICES+=,heat,h-api,h-api-cfn,h-api-cw,h-eng
+HEAT_STANDALONE=True
+
+# ceilometer - metering service (metering + alarming)
+ENABLED_SERVICES+=,ceilometer-acompute,ceilometer-acentral,ceilometer-collector,ceilometer-api
+ENABLED_SERVICES+=,ceilometer-alarm-notify,ceilometer-alarm-eval
+
+# sahara - data processing service
+ENABLED_SERVICES+=,sahara
