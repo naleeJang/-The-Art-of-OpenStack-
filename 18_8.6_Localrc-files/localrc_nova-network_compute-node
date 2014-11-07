@@ -1,0 +1,38 @@
+# devstack localrc for nova-network multi node on compute node
+
+# default
+HOST_IP=10.10.15.21
+MULTI_HOST=True
+ 
+# network
+FLAT_INTERFACE=eth0
+FIXED_RANGE=10.0.0.0/20
+FIXED_NETWORK_SIZE=4096
+FLOATING_RANGE=192.168.0.1/24
+ 
+# vnc
+VNCSERVER_LISTEN=0.0.0.0
+VNCSERVER_PROXYCLIENT_ADDRESS=$HOST_IP
+ 
+# logs
+DEST=/opt/stack
+LOGFILE=$DEST/logs/stack.sh.log
+SCREEN_LOGDIR=$DEST/logs/screen
+ 
+# system password
+ADMIN_PASSWORD=openstack
+MYSQL_PASSWORD=openstack
+RABBIT_PASSWORD=openstack
+SERVICE_PASSWORD=openstack
+SERVICE_TOKEN=openstackservicetoken
+
+# system hosts
+SERVICE_HOST=10.10.15.11
+MYSQL_HOST=$SERVICE_HOST
+RABBIT_HOST=$SERVICE_HOST
+GLANCE_HOSTPORT=$SERVICE_HOST:9292
+KEYSTONE_AUTH_HOST=$SERVICE_HOST
+KEYSTONE_SERVICE_HOST=$SERVICE_HOST
+
+# install service
+ENABLED_SERVICES=n-cpu,n-net,n-api
