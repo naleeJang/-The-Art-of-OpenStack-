@@ -564,3 +564,26 @@ $ sudo service ceilometer-api restart
 $ sudo service ceilometer-collector restart
 $ sudo service ceilometer-alarm-evaluator restart
 $ sudo service ceilometer-alarm-notifier restart
+$ sudo vi /etc/glance/glance-api.conf
+------ glance-api.conf start
+notification_driver = messaging
+------ glance-api.conf end
+$ sudo service glance-registry restart
+$ sudo service glance-api restart
+$ sudo vi /etc/cinder/cinder.conf
+------ cinder.conf start
+control_exchange = cinder
+notification_driver = cinder.openstack.common.notifier.rpc_notifier
+------ cinder.conf end
+$ sudo service cinder-api restart
+$ sudo service cinder-scheduler restart
+$ keystone role-create --name=ResellerAdmin
+$ keystone user-role-add --tenant service --user ceilometer --role dbd086a41ebe44eba03da9a57ce359c0
+$ sudo vi /etc/swift/proxy-server.conf
+------ proxy-server.conf start
+[pipeline:main]
+pipeline = healthcheck cache authtoken keystoneauth ceilometer proxy-server
+[filter:ceilometer]
+use = egg:ceilometer#swift
+------ proxy-server.conf end
+$ sudo service swift-proxy restart
