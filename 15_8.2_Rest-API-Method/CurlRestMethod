@@ -1,0 +1,7 @@
+----------------
+ 1. Use Curl API
+----------------
+$ curl -i 'http://10.10.15.11:5000/v2.0/tokens' -X POST -H "Content-Type: application/json" -d '{"auth": {"tenantName": "admin", "passwordCredentials": {"username": "admin", "password": "adminpass"}}}'
+$ curl -i -X GET http://10.10.15.11:5000/v2.0/tenants -H "X-Auth-Token: 8fbfae676e4d4ea98b710a2637c0d0f6"
+$ curl -i 'http://10.10.15.11:5000/v2.0/tokens' -X POST -H "Content-Type: application/json" -H "Accept: application/json"  -d '{"auth": {"tenantName": "demo", "passwordCredentials": {"username": "demo", "password": "demopass"}}}'
+$ curl -v http://10.10.15.11:8774/v2/a7d5bd7990f047ec9be61b0f6a5a204c/servers -H "X-Auth-Token:9c288ec41e204561a8aff1bdc7bb9876"
