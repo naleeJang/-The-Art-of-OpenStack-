@@ -1,0 +1,7 @@
+----------------
+ 1. PackStack 설치
+----------------
+$ sudo yum install -y http://repos.fedorapeople.org/repos/openstack/openstack-icehouse/rdo-release-icehouse-3.noarch.rpm
+$ sudo yum install openstack-packstack
+$ packstack --gen-answer-file my_answers.txt
+$ packstack --allinone
