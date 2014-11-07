@@ -1,0 +1,17 @@
+----------------
+ 1. Create Volume Storage
+----------------
+$ cat demo-openrc.sh
+------ demo-openrc.sh start
+export OS_USERNAME=demo
+export OS_PASSWORD=demopass
+export OS_TENANT_NAME=demo
+export OS_AUTH_URL=http://10.10.15.11:35357/v2.0
+------ demo-openrc.sh end
+$ source demo-openrc.sh
+$ cinder create --display-name testVolume1 1
+$ cinder list
+$ nova list
+$ nova volume-attach a961bc76-a9e7-4942-8198-3a6e6fb4faaf aed89043-0fd7-4a61-bf8f-a42c07d5f5dc /dev/vdb
+$ nova help volume-attach
+# fdisk -l
