@@ -5,7 +5,7 @@
 # Devstack localrc for nova-network all-in-one
 
 # default
-HOST_IP=192.168.1.20 ''설치하고자 하는 서버 IP를 입력하세요
+HOST_IP=<font color=red>192.168.1.20</font> #설치하고자 하는 서버 IP를 입력하세요
  
 # network
 FLAT_INTERFACE=eth0
