@@ -4,14 +4,14 @@
 ###########################
 # Devstack localrc for nova-network all-in-one
 
-# default
-HOST_IP=<font color=red>192.168.1.20</font> #설치하고자 하는 서버 IP를 입력하세요
+# default - 설치하고자 하는 서버 IP를 입력하세요
+HOST_IP=192.168.1.20 
  
 # network
 FLAT_INTERFACE=eth0
 FIXED_RANGE=10.0.0.0/20
 FIXED_NETWORK_SIZE=4096
-FLOATING_RANGE=192.168.1.128/28
+FLOATING_RANGE=192.168.1.128/28  #외부통신을 할 IP 할당 범위를 입력하세요
 
 # vnc
 VNCSERVER_LISTEN=0.0.0.0
