@@ -43,7 +43,7 @@ $ sudo rabbitmqctl change_password guest rabbitpass #설정하고자 하는 패�
 ------------------
  5. Keystone 설치
 ------------------
-$ sudo apt-get install keystone
+$ sudo apt-get install keystone python-keystoneclient
 $ sudo vi /etc/keystone/keystone.conf
 ------ keystone.conf start
 [database]
