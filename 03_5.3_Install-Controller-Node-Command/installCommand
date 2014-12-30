@@ -256,16 +256,6 @@ nova_admin_auth_url = http://10.10.15.11:35357/v2.0
 core_plugin = ml2
 service_plugins = router
 allow_overlapping_ips = True
-network_api_class = nova.network.neutronv2.api.API
-neutron_url = http://10.10.15.11:9696
-neutron_auth_strategy = keystone
-neutron_admin_tenant_name = service
-neutron_admin_username = neutron
-neutron_admin_password = neutronpass
-neutron_admin_auth_url = http://10.10.15.11:35357/v2.0
-linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
-firewall_driver = nova.virt.firewall.NoopFirewallDriver
-security_group_api = neutron
 service_neutron_metadata_proxy = true
 neutron_metadata_proxy_shared_secret = metadatasecret
 [database]
@@ -338,7 +328,7 @@ mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'cinderdbp
 mysql> exit
 $ sudo su -s /bin/sh -c "cinder-manage db sync" cinder
 $ source admin-openrc.sh
-$ keystone user-create –name=cinder --pass=cinderpass --email=cinder@email.com
+$ keystone user-create -–name=cinder --pass=cinderpass --email=cinder@email.com
 $ keystone user-role-add --user=cinder --tenant=service --role=admin
 $ sudo vi /etc/cinder/cinder.conf
 ------ cinder.conf start
