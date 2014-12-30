@@ -101,7 +101,7 @@ mechanism_drivers = openvswitch
 [ml2_type_gre]
 tunnel_id_ranges = 1:1000
 [ovs]
-local_ip = eth1
+local_ip = 10.0.10.31 #eth1 IP Address
 tunnel_type = gre
 enable_tunneling = True
 [securitygroup]
